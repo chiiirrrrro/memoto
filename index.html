@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>メモ帳（2人用・パスワード付き）</title>
+<style>
+  :root{--bg:#f8f8f8;--card:#fff;--muted:#666;--accent:#0b63a6;}
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,"Hiragino Kaku Gothic ProN",Meiryo,sans-serif;background:var(--bg);margin:0;padding:24px;color:#111}
+  .container{max-width:760px;margin:0 auto}
+  header h1{margin:0 0 12px 0;font-size:20px}
+  .card{background:var(--card);border:1px solid #e6e6e6;border-radius:8px;padding:14px;box-shadow:0 1px 0 rgba(0,0,0,0.02);margin-bottom:16px}
+  .muted{color:var(--muted);font-size:13px}
+  .row{display:flex;gap:8px;align-items:center}
+  input[type="text"], input[type="password"], textarea, select {
+    width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:14px;box-sizing:border-box;
+    background:#fff;
+  }
+  textarea{min-height:120px;resize:vertical}
+  button{background:var(--accent);color:#fff;border:none;padding:8px 12px;border-radius:6px;cursor:pointer}
+  button.ghost{background:transparent;border:1px solid #ddd;color:#111}
+  .memo-list{margin-top:8px}
+  .memo-item{display:flex;justify-content:space-between;padding:10px 8px;border-bottom:1px solid #f0f0f0}
+  .memo-title{font-weight:600}
+  .small{font-size:13px;color:var(--muted)}
+  .center{display:flex;justify-content:center;gap:8px}
+  .hint{font-size:13px;color:#b33;margin-top:8px}
+  .flex{display:flex;gap:8px}
+  .right{margin-left:auto}
+  .export-area{width:100%;height:80px}
+  footer{font-size:12px;color:var(--muted);text-align:center;margin-top:18px}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>メモ帳（2人用・パスワード付き）</h1>
+    <div class="muted">全ユーザー合計で <strong>5 件まで</strong>。閲覧はメモごとの4桁パスワードが必要です。</div>
+  </header>
+
+  <div id="setup" class="card" style="display:none">
+    <h3>初回セットアップ（2人分のアクセスコードを設定）</h3>
+    <div class="row" style="gap:12px">
+      <div style="flex:1">
+        <label>あなたの名前</label><input id="u1name" type="text" placeholder="あなた">
+      </div>
+      <div style="width:140px">
+        <label>4桁コード</label><input id="u1code" type="password" maxlength="4" placeholder="1234">
+      </div>
+    </div>
+    <div style="height:8px"></div>
+    <div class="row" style="gap:12px">
+      <div style="flex:1">
+        <label>友人の名前</label><input id="u2name" type="text" placeholder="友人">
+      </div>
+      <div style="width:140px">
+        <label>4桁コード</label><input id="u2code" type="password" maxlength="4" placeholder="5678">
+      </div>
+    </div>
+    <div style="height:10px"></div>
+    <div class="center">
+      <button id="saveUsersBtn">保存して続行</button>
+    </div>
+    <p class="small" style="margin-top:8px">※ 設定したコードを相手に直接教えてください。コードはブラウザの localStorage に保存されます。</p>
+  </div>
+
+  <div id="login" class="card" style="display:none">
+    <h3>ログイン</h3>
+    <div style="display:flex;gap:8px;align-items:center">
+      <select id="userSelect" style="width:160px"></select>
+      <input id="accessCode" type="password" maxlength="4" placeholder="4桁コード" style="width:120px">
+      <button id="loginBtn">ログイン</button>
+      <button id="resetBtn" class="ghost">リセット</button>
+    </div>
+    <p class="small" style="margin-top:8px">※ 設定済みの2人のどちらかのコードを入力してください。</p>
+  </div>
+
+  <div id="app" style="display:none">
+    <div class="card">
+      <div class="row">
+        <div><strong id="meLabel"></strong> としてログイン中</div>
+        <div class="right"><button id="logoutBtn" class="ghost">ログアウト</button></div>
+      </div>
+      <div style="height:8px"></div>
+
+      <form id="createForm">
+        <label>題名</label>
+        <input id="title" type="text" required maxlength="80" placeholder="題名">
+        <label style="margin-top:8px">内容</label>
+        <textarea id="content" required placeholder="メモ内容"></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+          <div style="width:160px">
+            <label>表示用パスワード（4桁）</label>
+            <input id="pwd" type="password" maxlength="4" placeholder="1234" required>
+          </div>
+          <div style="flex:1"></div>
+          <button type="submit">保存</button>
+        </div>
+        <p class="small" style="margin-top:6px">保存時点で全ユーザー共通のリストに追加されます。6件目以降は自動で古い順に削除されます。</p>
+      </form>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:8px">
+        <h3 style="margin:0">メモ一覧</h3>
+        <div class="small" style="margin-left:8px">（タイトルと日時のみ表示）</div>
+        <div class="right small">合計 <span id="count">0</span> 件</div>
+      </div>
+
+      <div id="memoList" class="memo-list" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px 0">データの同期（共有）</h3>
+      <div class="small">同じデータを友人と共有したい場合、下のエクスポート/インポートを使ってください。</div>
+      <div style="height:8px"></div>
+      <div class="row">
+        <button id="exportBtn">JSON をコピー（エクスポート）</button>
+        <button id="downloadBtn" class="ghost">JSON をダウンロード</button>
+        <button id="clearBtn" class="ghost">全データ削除</button>
+      </div>
+      <div style="height:8px"></div>
+      <label>貼り付けてインポート</label>
+      <textarea id="importArea" class="export-area" placeholder='ここに相手から受け取った JSON を貼り付けて「インポート」'></textarea>
+      <div class="center" style="margin-top:8px">
+        <button id="importBtn" class="ghost">インポート（上書き）</button>
+        <div class="small">※ 上書きされます。慎重に。</div>
+      </div>
+    </div>
+
+    <div id="viewerModal" class="card" style="display:none">
+      <h3 id="viewTitle" style="margin:0 0 6px 0"></h3>
+      <div class="small" id="viewTime"></div>
+      <div style="height:8px"></div>
+      <textarea id="viewContent" readonly></textarea>
+      <div style="height:8px"></div>
+      <div class="center">
+        <button id="closeView" class="ghost">閉じる</button>
+      </div>
+    </div>
+
+    <footer class="muted">
+      注意：パスワードはローカルに平文で保存されます（セキュリティ低）。重要な情報は保存しないでください。
+    </footer>
+  </div>
+</div>
+
+<script>
+/* ======= Storage keys ======= */
+const USERS_KEY = 'memo_users_v1';
+const MEMOS_KEY = 'memo_items_v1';
+
+/* ======= Utils ======= */
+function nowStr(){
+  const d = new Date();
+  const yy = d.getFullYear();
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  const hh = String(d.getHours()).padStart(2,'0');
+  const mi = String(d.getMinutes()).padStart(2,'0');
+  return `${yy}-${mm}-${dd} ${hh}:${mi}`;
+}
+function loadUsers(){ try{ return JSON.parse(localStorage.getItem(USERS_KEY)||'null'); }catch(e){return null} }
+function saveUsers(u){ localStorage.setItem(USERS_KEY, JSON.stringify(u)); }
+function loadMemos(){ try{ return JSON.parse(localStorage.getItem(MEMOS_KEY)||'[]'); }catch(e){return []} }
+function saveMemos(a){ localStorage.setItem(MEMOS_KEY, JSON.stringify(a)); }
+
+/* ======= Setup / Login handling ======= */
+const setupEl = document.getElementById('setup');
+const loginEl = document.getElementById('login');
+const appEl = document.getElementById('app');
+const meLabel = document.getElementById('meLabel');
+
+function showInitial(){
+  const users = loadUsers();
+  if(!users){
+    setupEl.style.display='block';
+    loginEl.style.display='none';
+    appEl.style.display='none';
+  } else {
+    setupEl.style.display='none';
+    loginEl.style.display='block';
+    appEl.style.display='none';
+    populateUserSelect(users);
+  }
+}
+function populateUserSelect(users){
+  const sel = document.getElementById('userSelect');
+  sel.innerHTML = '';
+  users.forEach((u,i)=>{
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = u.name;
+    sel.appendChild(opt);
+  });
+}
+
+/* Save users first time */
+document.getElementById('saveUsersBtn').addEventListener('click', ()=>{
+  const n1 = document.getElementById('u1name').value.trim() || 'You';
+  const c1 = (document.getElementById('u1code').value||'').trim();
+  const n2 = document.getElementById('u2name').value.trim() || 'Friend';
+  const c2 = (document.getElementById('u2code').value||'').trim();
+  if(!(c1.length===4 && /^\d{4}$/.test(c1) && c2.length===4 && /^\d{4}$/.test(c2))){
+    alert('両方とも4桁の数字コードを入力してください。');
+    return;
+  }
+  const users = [{name:n1,code:c1},{name:n2,code:c2}];
+  saveUsers(users);
+  alert('保存しました。コードは相手に直接伝えてください。');
+  populateUserSelect(users);
+  setupEl.style.display='none';
+  loginEl.style.display='block';
+});
+
+/* Login */
+document.getElementById('loginBtn').addEventListener('click', ()=>{
+  const users = loadUsers();
+  const sel = document.getElementById('userSelect');
+  const idx = Number(sel.value);
+  const code = (document.getElementById('accessCode').value||'').trim();
+  if(!users || typeof users[idx] === 'undefined'){ alert('ユーザーが見つかりません'); return; }
+  if(code === users[idx].code){
+    startApp(idx);
+  } else {
+    alert('コードが違います');
+  }
+});
+
+/* Reset users (clear all) */
+document.getElementById('resetBtn').addEventListener('click', ()=>{
+  if(!confirm('ユーザー設定と全メモを削除します。よろしいですか？')) return;
+  localStorage.removeItem(USERS_KEY);
+  localStorage.removeItem(MEMOS_KEY);
+  location.reload();
+});
+
+/* Logout */
+document.getElementById('logoutBtn').addEventListener('click', ()=>{
+  appEl.style.display='none';
+  loginEl.style.display='block';
+  document.getElementById('accessCode').value='';
+});
+
+/* Start app for user */
+let currentUserIndex = null;
+function startApp(userIndex){
+  currentUserIndex = userIndex;
+  const users = loadUsers();
+  meLabel.textContent = users[userIndex].name;
+  loginEl.style.display='none';
+  appEl.style.display='block';
+  renderList();
+}
+
+/* ======= Create / List / View ======= */
+const createForm = document.getElementById('createForm');
+createForm.addEventListener('submit', (e)=>{
+  e.preventDefault();
+  const title = document.getElementById('title').value.trim();
+  const content = document.getElementById('content').value.trim();
+  const pwd = document.getElementById('pwd').value.trim();
+  if(!title || !content || !(pwd.length===4 && /^\d{4}$/.test(pwd))){
+    alert('題名・内容を入力し、4桁のパスワードを設定してください。');
+    return;
+  }
+  const memos = loadMemos();
+  // enforce max 5
+  while(memos.length >= 5) memos.shift();
+  memos.push({title,content,password:pwd,time:nowStr()});
+  saveMemos(memos);
+  createForm.reset();
+  renderList();
+});
+
+function renderList(){
+  const list = document.getElementById('memoList');
+  const memos = loadMemos();
+  list.innerHTML = '';
+  if(memos.length===0){
+    list.innerHTML = '<div class="small">メモはまだありません。</div>';
+  } else {
+    memos.forEach((m,i)=>{
+      const div = document.createElement('div');
+      div.className = 'memo-item';
+      const left = document.createElement('div');
+      left.innerHTML = `<div class="memo-title">${escapeHtml(m.title)}</div><div class="small">${escapeHtml(m.time)}</div>`;
+      const right = document.createElement('div');
+      right.innerHTML = `<button class="ghost" data-index="${i}" onclick="promptView(${i})">表示</button> <button class="ghost" onclick="promptDelete(${i})">削除</button>`;
+      div.appendChild(left);
+      div.appendChild(right);
+      list.appendChild(div);
+    });
+  }
+  document.getElementById('count').textContent = memos.length;
+}
+
+/* view flow: ask password input (client-side) */
+window.promptView = function(i){
+  const pwd = prompt('メモを表示するには4桁のパスワードを入力してください');
+  if(pwd === null) return;
+  const memos = loadMemos();
+  const m = memos[i];
+  if(!m){ alert('メモが見つかりません'); return; }
+  if(pwd === m.password){
+    showViewer(m);
+  } else {
+    alert('パスワードが違います');
+  }
+}
+
+/* delete flow: only allow if user supplies the memo password */
+window.promptDelete = function(i){
+  const pwd = prompt('削除するにはそのメモの4桁パスワードを入力してください');
+  if(pwd === null) return;
+  const memos = loadMemos();
+  const m = memos[i];
+  if(!m){ alert('メモが見つかりません'); return; }
+  if(pwd === m.password){
+    if(confirm('本当に削除しますか？')){
+      memos.splice(i,1);
+      saveMemos(memos);
+      renderList();
+    }
+  } else {
+    alert('パスワードが違います');
+  }
+}
+
+function showViewer(memo){
+  document.getElementById('viewerModal').style.display='block';
+  document.getElementById('viewTitle').textContent = memo.title;
+  document.getElementById('viewTime').textContent = memo.time;
+  document.getElementById('viewContent').value = memo.content;
+}
+document.getElementById('closeView').addEventListener('click', ()=>{
+  document.getElementById('viewerModal').style.display='none';
+});
+
+/* ======= Export / Import / Download / Clear ======= */
+document.getElementById('exportBtn').addEventListener('click', async ()=>{
+  const data = localStorage.getItem(MEMOS_KEY) || '[]';
+  try{
+    await navigator.clipboard.writeText(data);
+    alert('JSON をコピーしました。相手に貼って渡してください。');
+  }catch(e){
+    // fallback
+    document.getElementById('importArea').value = data;
+    alert('コピーに失敗しました。下のボックスに JSON を表示しましたので手動でコピーしてください。');
+  }
+});
+document.getElementById('downloadBtn').addEventListener('click', ()=>{
+  const data = localStorage.getItem(MEMOS_KEY) || '[]';
+  const blob = new Blob([data], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'memos.json';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+document.getElementById('importBtn').addEventListener('click', ()=>{
+  const txt = document.getElementById('importArea').value.trim();
+  if(!txt){ alert('貼り付ける JSON を入力してください'); return; }
+  try{
+    const parsed = JSON.parse(txt);
+    if(!Array.isArray(parsed)) throw 'not array';
+    if(!confirm('インポートすると現在のメモは上書きされます。続行しますか？')) return;
+    saveMemos(parsed.slice(0,5)); // enforce max 5
+    renderList();
+    alert('インポートしました');
+  }catch(e){
+    alert('無効な JSON です');
+  }
+});
+document.getElementById('clearBtn').addEventListener('click', ()=>{
+  if(!confirm('全メモを削除します。よろしいですか？')) return;
+  localStorage.removeItem(MEMOS_KEY);
+  renderList();
+});
+
+/* ======= Helpers ======= */
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c])); }
+
+/* 初期表示 */
+showInitial();
+renderList();
+</script>
+</body>
+</html>
