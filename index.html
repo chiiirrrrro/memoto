@@ -51,8 +51,13 @@
     <textarea id="memoText" placeholder="メモ内容を入力"></textarea>
     <button onclick="addMemo()">追加</button>
     <div id="list"></div>
-    <p class="small">※ メモは5件まで。古い順に削除されます。<br>
-    ※ このURLを共有すると同じメモが表示されます。</p>
+    <p class="small">
+      ※ メモは5件まで。古い順に削除されます。<br>
+      ※ データを保存・共有したい場合はファイルを使ってください。
+    </p>
+    <hr>
+    <button onclick="saveFile()">💾 ファイルに保存</button>
+    <input type="file" id="fileInput" accept=".json" onchange="loadFile(event)">
   </div>
 
   <script>
@@ -84,7 +89,6 @@
       document.getElementById("login").style.display = "none";
       document.getElementById("app").style.display = "block";
       document.getElementById("welcome").innerText = `${user}さんのメモ`;
-      loadFromURL();
     }
 
     function addMemo() {
@@ -94,7 +98,6 @@
       if(memos.length > 5) memos.pop();
       document.getElementById("memoText").value = "";
       render();
-      saveToURL();
     }
 
     function render() {
@@ -105,22 +108,37 @@
       });
     }
 
-    function saveToURL() {
+    // 💾 ファイル保存
+    function saveFile() {
+      if(!memos.length) return alert("メモがありません。");
       const data = JSON.stringify(memos);
       const encrypted = encrypt(data, user+pass);
-      const base = location.origin + location.pathname;
-      history.replaceState(null, "", `${base}#${encrypted}`);
+      const blob = new Blob([encrypted], {type: "application/json"});
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${user}_memo.json`;
+      a.click();
     }
 
-    function loadFromURL() {
-      const hash = location.hash.slice(1);
-      if(!hash) return;
-      const decrypted = decrypt(hash, user+pass);
-      try {
-        const parsed = JSON.parse(decrypted);
-        if(Array.isArray(parsed)) memos = parsed;
-      } catch {}
-      render();
+    // 📂 ファイル読み込み
+    function loadFile(event) {
+      const file = event.target.files[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        const decrypted = decrypt(e.target.result, user+pass);
+        try {
+          const parsed = JSON.parse(decrypted);
+          if(Array.isArray(parsed)) {
+            memos = parsed;
+            render();
+            alert("メモを読み込みました。");
+          } else alert("ファイルが正しくありません。");
+        } catch {
+          alert("パスワードが違うか、ファイルが壊れています。");
+        }
+      };
+      reader.readAsText(file);
     }
   </script>
 </body>
